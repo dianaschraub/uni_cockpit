@@ -96,7 +96,7 @@ function render() {
         ${s.archived ? `<div class="notice">${icon('archive')}<div><strong>Du siehst ein archiviertes Semester.</strong><p>Alle Daten bleiben erhalten und können weiter bearbeitet werden.</p></div></div>` : ''}
         ${{dashboard:renderDashboard,tasks:renderTasks,anki:renderAnki,stats:renderStats,settings:renderSettings,backup:renderBackup,help:renderHelp}[view]()}
       </main>
-      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.1</span></footer>
+      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.1.1</span></footer>
     </div>`;
   for(const id of openedDetails){const detail=document.getElementById(id);if(detail)detail.open=true;}
   if(view==='help')queueMicrotask(checkOffline);
