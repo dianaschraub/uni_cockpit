@@ -1,5 +1,5 @@
-const CACHE = 'uni-cockpit-v2.1.1-flat';
-const FILES = ['./', './index.html', './styles.css', './app.js', './model.js', './storage.js', './sync.js', './cloud-store.js', './cloud-session.js', './firebase-client.js', './firebase-sdk.js', './firebase-config.js', './firebase-transport.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
+const CACHE = 'uni-cockpit-v2.2.0-flat';
+const FILES = ['./', './index.html', './styles.css', './app.js', './model.js', './deadline-alerts.js', './storage.js', './sync.js', './cloud-store.js', './cloud-session.js', './firebase-client.js', './firebase-sdk.js', './firebase-config.js', './firebase-transport.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
   // Updates wait until existing app windows close to avoid mixing code versions.

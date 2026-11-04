@@ -3833,3 +3833,21 @@ textarea:focus-visible, summary:focus-visible { outline-color: #7439d6; }
 .status-submitted { background: #cdf9e5; color: #00694f; }
 .status-unresolved { background: #ffebba; color: #824000; }
 .status-missed { background: #ffe0e8; color: #a61536; }
+
+
+/* One gentle pulse every 2.4 seconds; text remains visible throughout. */
+@keyframes deadline-pulse {
+  0%, 100% { background-color: #c5294b; border-color: #c5294b; }
+  50% { background-color: #9f1637; border-color: #9f1637; }
+}
+.deadline-urgent { animation: deadline-pulse 2.4s ease-in-out infinite; }
+.urgent-badge { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 11px; font-weight: 650; line-height: 1.6; }
+.urgent-badge .icon { width: 17px; height: 17px; }
+.deadline-alarm-settings { border: 1px solid var(--line); background: #fff; border-radius: 12px; margin: 0 0 22px; padding: 0 16px; }
+.deadline-alarm-settings summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; }
+.deadline-alarm-settings summary .icon { width: 17px; height: 17px; color: #a61536; }
+.deadline-alarm-settings > div { padding-bottom: 16px; }
+.deadline-alarm-settings p { font-size: 12px; color: #52647b; margin: 0 0 12px; }
+.deadline-alarm-settings .helper-text { margin: 12px 0 0; font-size: 11px; }
+.alarm-active { margin-left: auto; border-radius: 6px; background: #cdf9e5; color: #00694f; font-size: 10px; padding: 4px 6px; }
+@media(prefers-reduced-motion:reduce) { .deadline-urgent { animation: none; } }

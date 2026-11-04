@@ -1,11 +1,18 @@
 # Uni-Cockpit: GitHub-Paket für Android
 
-Version 2.1.1: kräftige Farben, kompakte Kennzahlen und neu gestaltete Terminliste. Unter jedem
+Version 2.2: 24-Stunden-Warnung, kräftige Farben, kompakte Kennzahlen und neu gestaltete Terminliste. Unter jedem
 Countdown lässt sich „Teilaufgaben & Vorbereitung“ öffnen. Aufgabe 1–3 sind
 pro Abgabe voreingestellt. Mit „Teilaufgabe hinzufügen“ können Aufgabe 4, 5
 und weitere Einträge ergänzt und umbenannt werden. Mathe erhält zusätzlich
 „Quiz als PDF umformatiert“. Alle Häkchen werden automatisch gespeichert.
 Vorhandene Termine, Ergebnisse und Bearbeitungshäkchen bleiben erhalten.
+In den letzten 24 Stunden pulsiert die rote Abgabefläche (bei reduzierten
+Bewegungen bleibt sie ruhig). Unter „Abgabewarnung & Alarmton“ kann ein
+kurzer Ton pro Abgabe und Termin aktiviert werden. Der Ton funktioniert
+nur bei geöffneter, sichtbarer App; nach dem Schließen erneut aktivieren.
+Für einen verlässlichen Alarm bei geschlossener App einen Gerätewecker
+oder Kalender verwenden.
+
 Nach dem Update alle Cockpit-Tabs und die installierte App vollständig
 schließen und erneut öffnen, damit der neue Offline-Cache aktiviert wird.
 
