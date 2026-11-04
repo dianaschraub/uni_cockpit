@@ -1,6 +1,6 @@
 # Uni-Cockpit: GitHub-Paket für Android
 
-Version 2.1: kompakte Kennzahlen und neu gestaltete Terminliste. Unter jedem
+Version 2.1.1: kräftige Farben, kompakte Kennzahlen und neu gestaltete Terminliste. Unter jedem
 Countdown lässt sich „Teilaufgaben & Vorbereitung“ öffnen. Aufgabe 1–3 sind
 pro Abgabe voreingestellt. Mit „Teilaufgabe hinzufügen“ können Aufgabe 4, 5
 und weitere Einträge ergänzt und umbenannt werden. Mathe erhält zusätzlich
