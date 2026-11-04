@@ -1,3 +1,4 @@
+import { isUrgentDeadline, pendingDeadlineAlarms } from './deadline-alerts.js';
 import { STATUS, TEMPLATES, uid, initialState, makeLecture, makeTask, taskStatus, reconcileDeadlines,
   countdownParts, lectureCountdown, statistics, copyLectureStructure, validateState, urgency, ensurePreparation } from './model.js';
 import { LocalRepository, STORAGE_KEY } from './storage.js';
@@ -65,6 +66,59 @@ const courseIcon = l => `<span class="course-icon ${l.template}">${icon(l.templa
 const button = (action, label, symbol = '', cls = 'btn', attrs = '') => `<button type="button" class="${cls}" data-action="${action}" ${attrs}>${symbol ? icon(symbol) : ''}${label}</button>`;
 const empty = (symbol, title, detail, action = '') => `<div class="empty-state">${icon(symbol)}<h3>${title}</h3><p>${detail}</p>${action}</div>`;
 
+const ALARM_STORAGE_KEY='mein-uni-cockpit.deadline-alarms.v1';
+let alarmAudio=null,alarmEnabled=false,alarmSeen=new Set();
+function readAlarmHistory(){
+  try{const keys=JSON.parse(localStorage.getItem(ALARM_STORAGE_KEY)||'[]');if(Array.isArray(keys))for(const key of keys)if(typeof key==='string')alarmSeen.add(key);}catch{}
+}
+readAlarmHistory();
+function alarmRunning(){return alarmEnabled && alarmAudio?.state==='running';}
+function playDeadlineChime(){
+  if(!alarmRunning())return false;
+  const start=alarmAudio.currentTime;
+  [880,660,880].forEach((frequency,index)=>{
+    const oscillator=alarmAudio.createOscillator(),gain=alarmAudio.createGain(),at=start+index*.4;
+    oscillator.type='sine';oscillator.frequency.value=frequency;
+    gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.11,at+.015);
+    gain.gain.linearRampToValueAtTime(0,at+.23);
+    oscillator.connect(gain);gain.connect(alarmAudio.destination);
+    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+    oscillator.start(at);oscillator.stop(at+.24);
+  });
+  return true;
+}
+function pollDeadlineAlarm(){
+  if(loadError || document.visibilityState!=='visible' || !alarmRunning())return;
+  readAlarmHistory();
+  const pending=pendingDeadlineAlarms(state,repository.key,alarmSeen);
+  if(!pending.length)return;
+  try{
+    if(!playDeadlineChime())return;
+    for(const item of pending)alarmSeen.add(item.key);
+    try{localStorage.setItem(ALARM_STORAGE_KEY,JSON.stringify([...alarmSeen].slice(-2000)));}catch{}
+    toast(`${pending.length===1?'Abgabe in höchstens 24 Stunden':`${pending.length} Abgaben in höchstens 24 Stunden`}: ${pending.map(item=>item.title).join(', ')}`);
+  }catch{alarmEnabled=false;toast('Der Alarmton konnte nicht abgespielt werden. Bitte erneut aktivieren.',true);render();}
+}
+async function toggleDeadlineAlarm(){
+  if(alarmRunning()){
+    alarmEnabled=false;await alarmAudio.suspend();render();return;
+  }
+  try{
+    const Audio=window.AudioContext||window.webkitAudioContext;
+    if(!Audio)throw new Error('unsupported');
+    if(!alarmAudio || alarmAudio.state==='closed')alarmAudio=new Audio();
+    await alarmAudio.resume();
+    if(alarmAudio.state!=='running')throw new Error('blocked');
+    alarmEnabled=true;
+    const pending=pendingDeadlineAlarms(state,repository.key,alarmSeen);
+    if(pending.length)pollDeadlineAlarm();else playDeadlineChime();
+    render();
+  }catch{alarmEnabled=false;toast('Der Browser erlaubt gerade keinen Alarmton. Öffne die App direkt in Chrome und versuche es erneut.',true);render();}
+}
+function deadlineAlarmControls(){
+  return `<details id="deadline-alarm-settings" class="deadline-alarm-settings"><summary>${icon('alert')}Abgabewarnung & Alarmton${alarmRunning()?'<span class="alarm-active">Ton aktiv</span>':''}</summary><div><p>In den letzten 24 Stunden pulsiert die rote Countdown-Fläche. Ein kurzer Alarmton kann dich einmal je Abgabe und Termin auf diesem Gerät erinnern – auch für andere nicht archivierte Semester.</p>${button('toggle-deadline-alarm',alarmRunning()?'Alarmton ausschalten':'Alarmton aktivieren & testen','',alarmRunning()?'btn btn-white':'btn btn-primary')}<p class="helper-text">Der Ton funktioniert nur bei geöffneter, sichtbarer App und passender Medienlautstärke. Nach dem Schließen erneut aktivieren. Bei gesperrtem Bildschirm oder geschlossener App gibt es keinen zuverlässigen Alarm.</p></div></details>`;
+}
+
 function render() {
   if (loadError) { renderRecovery(); return; }
   const openedDetails=[...document.querySelectorAll('#app details[open][id]')].map(el=>el.id);
@@ -96,9 +150,10 @@ function render() {
         ${s.archived ? `<div class="notice">${icon('archive')}<div><strong>Du siehst ein archiviertes Semester.</strong><p>Alle Daten bleiben erhalten und können weiter bearbeitet werden.</p></div></div>` : ''}
         ${{dashboard:renderDashboard,tasks:renderTasks,anki:renderAnki,stats:renderStats,settings:renderSettings,backup:renderBackup,help:renderHelp}[view]()}
       </main>
-      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.1.1</span></footer>
+      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.2</span></footer>
     </div>`;
   for(const id of openedDetails){const detail=document.getElementById(id);if(detail)detail.open=true;}
+  queueMicrotask(pollDeadlineAlarm);
   if(view==='help')queueMicrotask(checkOffline);
   if (active && document.getElementById(active)) {
     document.getElementById(active).focus({ preventScroll: true });
@@ -130,6 +185,7 @@ function renderDashboard() {
       <div class="section-heading"><div><h2>Deine nächsten Abgaben <span class="count-pill">${s.lectures.length}</span></h2><p>Eine Vorlesung, ein Countdown. Du behältst den Überblick.</p></div></div>
       <div class="countdown-grid">${s.lectures.length ? s.lectures.map(countdownCard).join('') : empty('book','Platz für dein Semester','Füge deine erste Vorlesung hinzu.',button('new-lecture','Vorlesung hinzufügen','plus','btn btn-primary'))}</div>
       <div class="legend" aria-label="Countdown-Farben"><span><i class="dot blue"></i>Mehr als 5 Tage</span><span><i class="dot orange"></i>2–5 Tage</span><span><i class="dot red"></i>Unter 2 Tagen</span><span><i class="dot green"></i>Keine offene Frist</span></div>
+      ${deadlineAlarmControls()}
       <section class="panel next-panel"><div class="panel-heading"><h2>Was als Nächstes ansteht</h2><a href="#tasks" class="text-link">Alle Aufgaben ${icon('arrow')}</a></div>
         ${upcoming.length ? `<div class="upcoming-list">${upcoming.map(({l,t})=>`<button class="upcoming-item" data-action="edit-task" data-lecture="${l.id}" data-task="${t.id}"><time datetime="${esc(t.dueAt)}" class="date-tile">${new Date(t.dueAt).getDate()}<small>${new Intl.DateTimeFormat('de-DE',{month:'short'}).format(new Date(t.dueAt))}</small></time><span class="upcoming-content"><strong>${esc(t.title)}</strong><small>${esc(l.name)}</small></span><span class="upcoming-time">${new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(new Date(t.dueAt))} Uhr${icon('chevron')}</span></button>`).join('')}</div>` : `<div class="calm-empty">${icon('calendar')}<div><strong>Deine Termine haben hier ihren Platz.</strong><p>${undated ? `Für ${undated} offene Aufgaben ist noch keine Abgabefrist eingetragen.` : 'Aktuell steht keine zukünftige Abgabe an.'}</p></div>${button('tasks','Termine eintragen','arrow','text-link')}</div>`}
       </section>
@@ -143,9 +199,10 @@ function metric(symbol, label, value, hint, tone) {
 }
 function countdownCard(l) {
   const c = lectureCountdown(l), stats = statistics([l]);
+  const urgent=c.kind==='deadline' && isUrgentDeadline(c.task);
   const activeTask=c.task||l.tasks.find(t=>taskStatus(t)==='open');
   const content = c.target ? `<p class="countdown-label">${c.kind === 'release' ? 'NÄCHSTE FREISCHALTUNG' : 'NÄCHSTE ABGABE'} <span>· ${esc(c.task.title)}</span></p><div class="countdown-digits" data-target="${c.target}">${digits(c.target)}</div><p class="countdown-date">${icon('calendar')}${fmtDate(c.target)}</p>${c.kind==='deadline' && c.task.releaseAt && Date.parse(c.task.releaseAt)>Date.now() ? `<p class="release-note">Freischaltung: ${fmtDate(c.task.releaseAt)}</p>` : ''}` : `<div class="countdown-empty"><span class="countdown-empty-icon">${icon(c.kind === 'unresolved' ? 'alert' : 'calendar')}</span><h3>${c.kind === 'unresolved' ? 'Eine Rückfrage bleibt.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Bereit für deine Termine.' : 'Gerade alles im Grünen.'}</h3><p>${c.kind === 'unresolved' ? 'Bitte kläre die überfälligen Abgaben.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Trage deine erste Abgabefrist ein.' : 'Aktuell steht keine offene Abgabe an.'}</p></div>`;
-  return `<article class="countdown-card tone-${c.color}"><div class="course-heading">${courseIcon(l)}<h3>${esc(l.name)}</h3>${button('edit-lecture',`<span class="sr-only">${esc(l.name)} bearbeiten</span>`,'edit','icon-button',`data-lecture="${l.id}"`)}</div>${content}
+  return `<article class="countdown-card tone-${c.color}${urgent?' deadline-urgent':''}"><div class="course-heading">${courseIcon(l)}<h3>${esc(l.name)}</h3>${button('edit-lecture',`<span class="sr-only">${esc(l.name)} bearbeiten</span>`,'edit','icon-button',`data-lecture="${l.id}"`)}</div>${urgent?`<p class="urgent-badge">${icon('alert')}Abgabe in höchstens 24 Stunden</p>`:''}${content}
     ${c.unresolved.length ? `<button class="overdue-warning" data-action="course-unresolved" data-lecture="${l.id}">${icon('alert')}${c.unresolved.length} überfällige ${c.unresolved.length === 1 ? 'Abgabe' : 'Abgaben'} zu klären ${icon('arrow')}</button>` : ''}
     ${activeTask?coursePreparation(l,activeTask):''}
     <div class="course-bottom"><span>${stats.submitted} von ${stats.total} abgegeben${!l.countKnown ? ' · Anzahl noch offen' : ''}</span>${button('course-tasks', c.target ? 'Aufgaben ansehen' : 'Aufgaben & Termine','arrow','text-link',`data-lecture="${l.id}"`)}</div>${progress(stats.submitted,stats.total)}
@@ -443,6 +500,7 @@ document.addEventListener('click', async event=>{
   if(action==='persistent-storage'){
     const granted=await navigator.storage?.persist?.();toast(granted?'Dein Browser hat dauerhaften Speicher zugesagt. Regelmäßige Sicherungen bleiben sinnvoll.':'Dein Browser hat dauerhaften Speicher nicht zugesagt. Sichere regelmäßig als JSON.');return;
   }
+  if(action==='toggle-deadline-alarm'){await toggleDeadlineAlarm();return;}
   if(action==='install' && installEvent){await installEvent.prompt();installEvent=null;render();}
 });
 document.addEventListener('change',event=>{
@@ -563,6 +621,7 @@ window.addEventListener('storage',event=>{
   }
 });
 function refreshTime(){
+  pollDeadlineAlarm();
   if(loadError || $('#modal').open)return;
   if(reconcileDeadlines(state)){persist();render();}
   else{document.querySelectorAll('[data-target]').forEach(el=>{el.innerHTML=digits(el.dataset.target);});if(view==='dashboard')render();if(view==='tasks'&&!$('#modal').open)$('#task-groups').innerHTML=taskGroups();}
