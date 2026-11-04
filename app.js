@@ -1,5 +1,5 @@
 import { STATUS, TEMPLATES, uid, initialState, makeLecture, makeTask, taskStatus, reconcileDeadlines,
-  countdownParts, lectureCountdown, statistics, copyLectureStructure, validateState, urgency } from './model.js';
+  countdownParts, lectureCountdown, statistics, copyLectureStructure, validateState, urgency, ensurePreparation } from './model.js';
 import { LocalRepository, STORAGE_KEY } from './storage.js';
 import { CloudSession } from './cloud-session.js';
 
@@ -67,6 +67,7 @@ const empty = (symbol, title, detail, action = '') => `<div class="empty-state">
 
 function render() {
   if (loadError) { renderRecovery(); return; }
+  const openedDetails=[...document.querySelectorAll('#app details[open][id]')].map(el=>el.id);
   const active = document.activeElement?.id;
   const selection = document.activeElement?.selectionStart;
   const s = semester();
@@ -95,8 +96,9 @@ function render() {
         ${s.archived ? `<div class="notice">${icon('archive')}<div><strong>Du siehst ein archiviertes Semester.</strong><p>Alle Daten bleiben erhalten und können weiter bearbeitet werden.</p></div></div>` : ''}
         ${{dashboard:renderDashboard,tasks:renderTasks,anki:renderAnki,stats:renderStats,settings:renderSettings,backup:renderBackup,help:renderHelp}[view]()}
       </main>
-      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.0</span></footer>
+      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.1</span></footer>
     </div>`;
+  for(const id of openedDetails){const detail=document.getElementById(id);if(detail)detail.open=true;}
   if(view==='help')queueMicrotask(checkOffline);
   if (active && document.getElementById(active)) {
     document.getElementById(active).focus({ preventScroll: true });
@@ -129,7 +131,7 @@ function renderDashboard() {
       <div class="countdown-grid">${s.lectures.length ? s.lectures.map(countdownCard).join('') : empty('book','Platz für dein Semester','Füge deine erste Vorlesung hinzu.',button('new-lecture','Vorlesung hinzufügen','plus','btn btn-primary'))}</div>
       <div class="legend" aria-label="Countdown-Farben"><span><i class="dot blue"></i>Mehr als 5 Tage</span><span><i class="dot orange"></i>2–5 Tage</span><span><i class="dot red"></i>Unter 2 Tagen</span><span><i class="dot green"></i>Keine offene Frist</span></div>
       <section class="panel next-panel"><div class="panel-heading"><h2>Was als Nächstes ansteht</h2><a href="#tasks" class="text-link">Alle Aufgaben ${icon('arrow')}</a></div>
-        ${upcoming.length ? `<div class="upcoming-list">${upcoming.map(({l,t})=>`<button class="upcoming-item" data-action="edit-task" data-lecture="${l.id}" data-task="${t.id}"><span class="date-tile">${new Date(t.dueAt).getDate()}<small>${new Intl.DateTimeFormat('de-DE',{month:'short'}).format(new Date(t.dueAt))}</small></span><span><strong>${esc(t.title)}</strong><small>${esc(l.name)}</small></span><span class="upcoming-time">${new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(new Date(t.dueAt))} Uhr${icon('chevron')}</span></button>`).join('')}</div>` : `<div class="calm-empty">${icon('calendar')}<div><strong>Deine Termine haben hier ihren Platz.</strong><p>${undated ? `Für ${undated} offene Aufgaben ist noch keine Abgabefrist eingetragen.` : 'Aktuell steht keine zukünftige Abgabe an.'}</p></div>${button('tasks','Termine eintragen','arrow','text-link')}</div>`}
+        ${upcoming.length ? `<div class="upcoming-list">${upcoming.map(({l,t})=>`<button class="upcoming-item" data-action="edit-task" data-lecture="${l.id}" data-task="${t.id}"><time datetime="${esc(t.dueAt)}" class="date-tile">${new Date(t.dueAt).getDate()}<small>${new Intl.DateTimeFormat('de-DE',{month:'short'}).format(new Date(t.dueAt))}</small></time><span class="upcoming-content"><strong>${esc(t.title)}</strong><small>${esc(l.name)}</small></span><span class="upcoming-time">${new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(new Date(t.dueAt))} Uhr${icon('chevron')}</span></button>`).join('')}</div>` : `<div class="calm-empty">${icon('calendar')}<div><strong>Deine Termine haben hier ihren Platz.</strong><p>${undated ? `Für ${undated} offene Aufgaben ist noch keine Abgabefrist eingetragen.` : 'Aktuell steht keine zukünftige Abgabe an.'}</p></div>${button('tasks','Termine eintragen','arrow','text-link')}</div>`}
       </section>
     </div><aside class="dashboard-rail">
       <section class="anki-teaser"><div class="teaser-top"><span class="teaser-icon">${icon('cards')}</span><span class="mini-label">GUT VORBEREITET</span></div><h2>Kleine Häkchen. <br>Gutes Gefühl.</h2><p>Halte fest, welche Karteikarten du erstellt oder importiert hast. Das Wiederholen übernimmt Anki.</p><div class="teaser-progress"><span>Deine Vorbereitung</span><strong>${stats.ankiDone} / ${stats.ankiTotal}</strong></div>${progress(stats.ankiDone,stats.ankiTotal)}<a href="#anki" class="teaser-link">Zur Anki-Vorbereitung ${icon('arrow')}</a></section>
@@ -141,13 +143,35 @@ function metric(symbol, label, value, hint, tone) {
 }
 function countdownCard(l) {
   const c = lectureCountdown(l), stats = statistics([l]);
+  const activeTask=c.task||l.tasks.find(t=>taskStatus(t)==='open');
   const content = c.target ? `<p class="countdown-label">${c.kind === 'release' ? 'NÄCHSTE FREISCHALTUNG' : 'NÄCHSTE ABGABE'} <span>· ${esc(c.task.title)}</span></p><div class="countdown-digits" data-target="${c.target}">${digits(c.target)}</div><p class="countdown-date">${icon('calendar')}${fmtDate(c.target)}</p>${c.kind==='deadline' && c.task.releaseAt && Date.parse(c.task.releaseAt)>Date.now() ? `<p class="release-note">Freischaltung: ${fmtDate(c.task.releaseAt)}</p>` : ''}` : `<div class="countdown-empty"><span class="countdown-empty-icon">${icon(c.kind === 'unresolved' ? 'alert' : 'calendar')}</span><h3>${c.kind === 'unresolved' ? 'Eine Rückfrage bleibt.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Bereit für deine Termine.' : 'Gerade alles im Grünen.'}</h3><p>${c.kind === 'unresolved' ? 'Bitte kläre die überfälligen Abgaben.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Trage deine erste Abgabefrist ein.' : 'Aktuell steht keine offene Abgabe an.'}</p></div>`;
   return `<article class="countdown-card tone-${c.color}"><div class="course-heading">${courseIcon(l)}<h3>${esc(l.name)}</h3>${button('edit-lecture',`<span class="sr-only">${esc(l.name)} bearbeiten</span>`,'edit','icon-button',`data-lecture="${l.id}"`)}</div>${content}
     ${c.unresolved.length ? `<button class="overdue-warning" data-action="course-unresolved" data-lecture="${l.id}">${icon('alert')}${c.unresolved.length} überfällige ${c.unresolved.length === 1 ? 'Abgabe' : 'Abgaben'} zu klären ${icon('arrow')}</button>` : ''}
+    ${activeTask?coursePreparation(l,activeTask):''}
     <div class="course-bottom"><span>${stats.submitted} von ${stats.total} abgegeben${!l.countKnown ? ' · Anzahl noch offen' : ''}</span>${button('course-tasks', c.target ? 'Aufgaben ansehen' : 'Aufgaben & Termine','arrow','text-link',`data-lecture="${l.id}"`)}</div>${progress(stats.submitted,stats.total)}
   </article>`;
 }
 function digits(target) { const c = countdownParts(target); return `<span>${String(c.days).padStart(2,'0')}<small>Tage</small></span><i>:</i><span>${String(c.hours).padStart(2,'0')}<small>Stunden</small></span><i>:</i><span>${String(c.minutes).padStart(2,'0')}<small>Minuten</small></span>`; }
+function coursePreparation(l,t){
+  const parts=t.parts||[],pdf=t.steps.find(step=>step.label==='Quiz als PDF umformatiert');
+  return `<details id="preparation-${l.id}" class="course-preparation"><summary><span>Teilaufgaben & Vorbereitung</span><small>${parts.filter(p=>p.done).length+(pdf?.done?1:0)}/${parts.length+(pdf?1:0)}</small>${icon('down')}</summary><div class="preparation-body"><p class="preparation-task">${esc(t.title)}</p>${parts.map(p=>`<label class="check-item ${p.done?'checked':''}"><input id="part-${p.id}" type="checkbox" data-task-part="${esc(p.id)}" data-lecture="${l.id}" data-task="${t.id}" ${p.done?'checked':''}><span>${esc(p.label)}</span></label>`).join('')}${pdf?`<label class="check-item pdf-check ${pdf.done?'checked':''}"><input id="pdf-${t.id}" type="checkbox" data-prep-step="${esc(pdf.label)}" data-lecture="${l.id}" data-task="${t.id}" ${pdf.done?'checked':''}><span>${esc(pdf.label)}</span></label>`:''}${button('course-add-part','Teilaufgabe hinzufügen','plus','btn btn-small btn-white',`data-lecture="${l.id}" data-task="${t.id}"`)}</div></details>`;
+}
+function partFields(parts){
+  return parts.map(p=>`<div class="part-edit-row" data-part-id="${esc(p.id)}"><label class="part-check"><input type="checkbox" name="part-done-${esc(p.id)}" ${p.done?'checked':''} aria-label="${esc(p.label)} erledigt"></label><input type="text" name="part-label-${esc(p.id)}" value="${esc(p.label)}" maxlength="200" required aria-label="Bezeichnung der Teilaufgabe"></div>`).join('');
+}
+function readTaskParts(){
+  return [...$('#task-parts').querySelectorAll('[data-part-id]')].map(row=>{
+    const label=row.querySelector('input[type=text]').value.trim();
+    if(!label)throw new Error('Bitte benenne jede Teilaufgabe.');
+    return {id:row.dataset.partId,label,done:row.querySelector('input[type=checkbox]').checked};
+  });
+}
+function addTaskPart(){
+  const current=$('#task-parts'),count=current.querySelectorAll('[data-part-id]').length;
+  if(count>=50){toast('Bis zu 50 Teilaufgaben pro Abgabe sind möglich.');return;}
+  current.insertAdjacentHTML('beforeend',partFields([{id:uid(),label:`Aufgabe ${count+1}`,done:false}]));
+  current.lastElementChild.querySelector('input[type=text]').focus();scheduleTaskAutosave();
+}
 function lectureOptions(selected = '') { return `<option value="">Alle Vorlesungen</option>${semester().lectures.map(l=>`<option value="${l.id}" ${selected===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}`; }
 function renderTasks() {
   return `${pageHeading('SCHRITT FÜR SCHRITT', 'Deine Aufgaben.', 'Von der Freischaltung bis zur Bewertung – alles an einem Ort.',button('new-task','Aufgabe hinzufügen','plus','btn btn-primary'))}
@@ -162,8 +186,8 @@ function taskGroups() {
     total += tasks.length;
     if (!tasks.length) return '';
     return `<section class="panel task-group"><div class="panel-heading"><div class="inline-course">${courseIcon(l)}<h2>${esc(l.name)}</h2></div><span class="muted">${tasks.length} Aufgaben</span></div><div class="task-table"><div class="task-table-head"><span>AUFGABE</span><span>ABGABE</span><span>STATUS</span><span>BEARBEITUNG</span><span></span></div>${tasks.map(t=>{
-      const status = taskStatus(t), done = t.steps.filter(s=>s.done).length;
-      return `<button class="task-row" data-action="edit-task" data-lecture="${l.id}" data-task="${t.id}"><span class="task-name"><span class="task-number">${String(t.number).padStart(2,'0')}</span><span><strong>${esc(t.title)}</strong>${t.releaseAt && Date.parse(t.releaseAt)>Date.now() ? `<small>Freischaltung: ${fmtDate(t.releaseAt)}</small>` : `<small>${t.score === null ? 'Noch keine Bewertung' : `${t.score} %`}${t.passed === null ? '' : t.passed ? ' · Bestanden' : ' · Nicht bestanden'}</small>`}</span></span><span class="task-date">${t.dueAt ? fmtDate(t.dueAt) : '<span class="muted">Termin eintragen</span>'}${status==='open' && t.dueAt ? `<small class="task-remaining ${urgency(t.dueAt)}">${compactCountdown(t.dueAt)}</small>` : ''}</span><span>${statusBadge(status)}</span><span class="task-progress">${progress(done,t.steps.length)}<small>${done}/${t.steps.length}</small></span>${icon('chevron')}</button>`;
+      const status = taskStatus(t), done = [...t.steps,...(t.parts||[])].filter(s=>s.done).length;
+      return `<button class="task-row" data-action="edit-task" data-lecture="${l.id}" data-task="${t.id}"><span class="task-name"><span class="task-number">${String(t.number).padStart(2,'0')}</span><span><strong>${esc(t.title)}</strong>${t.releaseAt && Date.parse(t.releaseAt)>Date.now() ? `<small>Freischaltung: ${fmtDate(t.releaseAt)}</small>` : `<small>${t.score === null ? 'Noch keine Bewertung' : `${t.score} %`}${t.passed === null ? '' : t.passed ? ' · Bestanden' : ' · Nicht bestanden'}</small>`}</span></span><span class="task-date">${t.dueAt ? fmtDate(t.dueAt) : '<span class="muted">Termin eintragen</span>'}${status==='open' && t.dueAt ? `<small class="task-remaining ${urgency(t.dueAt)}">${compactCountdown(t.dueAt)}</small>` : ''}</span><span>${statusBadge(status)}</span><span class="task-progress">${progress(done,t.steps.length+(t.parts?.length||0))}<small>${done}/${t.steps.length+(t.parts?.length||0)}</small></span>${icon('chevron')}</button>`;
     }).join('')}</div></section>`;
   }).join('');
   return total ? groups : empty('tasks','Hier ist noch Platz.','Keine Aufgaben für diese Auswahl gefunden.',button('new-task','Aufgabe hinzufügen','plus','btn btn-primary'));
@@ -242,8 +266,8 @@ function switchRepository(next){
   repository=next;
   if($('#modal').open){deferredCloud=true;toast('Ein neuer Kontostand ist bereit. Schließe die Bearbeitung, um ihn anzuzeigen.');return;}
   try{
-    state=repository.load();loadError=null;saveFailed=false;filterLecture='';filterStatus='';
-    if(reconcileDeadlines(state))persist();
+    state=repository.load();const preparationAdded=ensurePreparation(state);loadError=null;saveFailed=false;filterLecture='';filterStatus='';
+    if(reconcileDeadlines(state)||preparationAdded)persist();
     render();
   }catch(error){loadError=error;render();}
 }
@@ -332,6 +356,7 @@ function openTask(lectureId, taskId = null) {
     <div class="form-grid number-title"><label class="form-field">Nummer<input name="number" type="number" min="1" max="9999" required value="${t.number}"></label><label class="form-field">Titel<input name="title" maxlength="300" required value="${esc(t.title)}"></label></div>
     <div class="form-grid"><label class="form-field">Freischaltung<input name="releaseAt" type="datetime-local" value="${fieldDate(t.releaseAt)}"></label><label class="form-field">Abgabefrist<input name="dueAt" type="datetime-local" value="${fieldDate(t.dueAt)}"></label></div>
     <p class="helper-text">Optional. Zeiten in ${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}. Es werden keine Termine vorausgefüllt.</p>
+    <section class="form-section"><div class="parts-heading"><h3>Teilaufgaben</h3><span>Einzeln abhaken</span></div><div id="task-parts">${partFields(t.parts||[])}</div>${button('task-add-part','Teilaufgabe hinzufügen','plus','btn btn-small btn-white')}<p class="helper-text">Aufgabe 1, 2, 3 … Benenne sie bei Bedarf genauer. Weitere Aufgaben kannst du jederzeit ergänzen. Häkchen bestätigen noch keine Abgabe.</p></section>
     <section class="form-section"><h3>Bearbeitungsschritte</h3><div id="task-steps">${taskStepFields(t.steps)}</div><p class="helper-text">Diese Häkchen dokumentieren deine Bearbeitung. Bestätige die Abgabe zusätzlich unten.</p></section>
     <section class="form-section"><h3>Abgabe & Ergebnis</h3><label class="form-field">Abgabestatus<select name="status" id="task-status">${Object.entries(STATUS).map(([key,label])=>`<option value="${key}" ${status===key?'selected':''}>${label}</option>`).join('')}</select></label><div id="submission-field" ${status!=='submitted'?'hidden':''}><label class="form-field">Tatsächlicher Abgabezeitpunkt<input type="datetime-local" name="submittedAt" id="submitted-at" value="${fieldDate(t.submittedAt)}" ${status==='submitted'?'required':''}></label>${button('submitted-now','Jetzt als abgegeben bestätigen','check','btn btn-small btn-white')}<p class="helper-text">Für frühere Abgaben trage bitte den tatsächlichen Zeitpunkt ein.</p></div>
     <div class="form-grid"><label class="form-field">Bewertung in Prozent<input name="score" type="number" min="0" max="100" step="0.01" placeholder="Noch nicht bekannt" value="${t.score ?? ''}"></label><label class="form-field">Bestanden?<select name="passed"><option value="" ${t.passed===null?'selected':''}>Noch nicht bekannt</option><option value="true" ${t.passed===true?'selected':''}>Bestanden</option><option value="false" ${t.passed===false?'selected':''}>Nicht bestanden</option></select></label></div></section>
@@ -396,6 +421,8 @@ document.addEventListener('click', async event=>{
   if(action==='raw-export'){
     try { const raw=localStorage.getItem(repository?.key||STORAGE_KEY);if(raw===null)throw new Error('Keine Rohdaten vorhanden.');downloadBlob(new Blob([raw],{type:'application/json'}),'uni-cockpit-rohdaten.json'); }catch(error){toast(error.message,true);}return;
   }
+  if(action==='task-add-part'){addTaskPart();return;}
+  if(action==='course-add-part'){openTask(lid,tid);addTaskPart();return;}
   if(action==='new-task'){openTask(lid||filterLecture);return;}
   if(action==='edit-task'){openTask(lid,tid);return;}
   if(action==='new-lecture'){openLecture();return;}
@@ -429,6 +456,11 @@ document.addEventListener('change',event=>{
     modalContext.draft.steps=steps;$('#task-steps').innerHTML=taskStepFields(steps);
     const number=Math.max(0,...l.tasks.map(t=>t.number))+1;
     $('#task-form').elements.number.value=number;$('#task-form').elements.title.value=`${TEMPLATES[l.template].unit} ${number}`;
+  }
+  if(el.dataset.taskPart!==undefined || el.dataset.prepStep!==undefined){
+    const l=lectureById(el.dataset.lecture),t=l.tasks.find(t=>t.id===el.dataset.task);
+    const item=el.dataset.taskPart!==undefined?t.parts.find(p=>p.id===el.dataset.taskPart):t.steps.find(step=>step.label===el.dataset.prepStep);
+    if(item){item.done=el.checked;commit();}
   }
   if(el.dataset.anki!==undefined){
     const l=lectureById(el.dataset.lecture),w=l.weeks.find(w=>w.id===el.dataset.week);w.items[Number(el.dataset.anki)].done=el.checked;commit();
@@ -478,7 +510,7 @@ document.addEventListener('submit',event=>{
       const title=String(data.get('title')).trim();if(!title)throw new Error('Bitte gib einen Titel ein.');
       const number=Number(data.get('number'));if(l.tasks.some(v=>v.id!==t.id&&v.number===number))throw new Error('Diese Aufgabennummer ist in der Vorlesung schon vergeben.');
       Object.assign(t,{number,title,releaseAt,dueAt,status,submittedAt,score:data.get('score')===''?null:Number(data.get('score')),passed:data.get('passed')===''?null:data.get('passed')==='true',notes:String(data.get('notes')),link,
-        steps:t.steps.map((step,index)=>({...step,done:data.has(`step-${index}`)}))});
+        parts:readTaskParts(),steps:t.steps.map((step,index)=>({...step,done:data.has(`step-${index}`)}))});
       if(!ctx.taskId)l.tasks.push(t);
       l.tasks.sort((a,b)=>a.number-b.number);reconcileDeadlines(state);
     } else if(form.id==='lecture-form'){
@@ -504,7 +536,7 @@ document.addEventListener('submit',event=>{
       if(ctx.kind==='lecture'){semester().lectures=semester().lectures.filter(l=>l.id!==ctx.lectureId);if(filterLecture===ctx.lectureId)filterLecture='';}
     } else if(form.id==='import-form'){
       if(!data.has('confirmed'))return;
-      const candidate=ctx.candidate;reconcileDeadlines(candidate);
+      const candidate=ctx.candidate;ensurePreparation(candidate);reconcileDeadlines(candidate);
       try { if(!repository)repository=new LocalRepository();repository.save(candidate,{replace:true});cloud?.changed(); }
       catch { throw new Error('Die Sicherung konnte nicht gespeichert werden. Der bisherige Stand bleibt erhalten. Bitte prüfe den Browserspeicher.'); }
       state=candidate;loadError=null;saveFailed=false;filterLecture='';filterStatus='';search='';$('#modal').close();render();toast('Sicherung wiederhergestellt.');return;
@@ -542,7 +574,7 @@ async function checkOffline(){
   try{const keys=await caches.keys();$('#offline-state').textContent=keys.some(k=>k.startsWith('uni-cockpit-'))?'Die App-Dateien sind offline gespeichert.':'Noch kein Offline-Cache vorhanden. Öffne die App über HTTPS und lade sie einmal vollständig.';}
   catch{$('#offline-state').textContent='Offline-Cache in diesem Browser nicht verfügbar.';}
 }
-if(!loadError){reconcileDeadlines(state);persist();}
+if(!loadError){ensurePreparation(state);reconcileDeadlines(state);persist();}
 const start=location.hash.slice(1);if(['tasks','anki','stats','settings','backup','help'].includes(start))view=start;
 cloud=new CloudSession({guestRepository,onSwitch:switchRepository,onStatus:refreshCloudUI,canApply:()=>!$('#modal').open&&!saveFailed});
 render();

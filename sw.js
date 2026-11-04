@@ -1,4 +1,4 @@
-const CACHE = 'uni-cockpit-v2.0.1-flat';
+const CACHE = 'uni-cockpit-v2.1.0-flat';
 const FILES = ['./', './index.html', './styles.css', './app.js', './model.js', './storage.js', './sync.js', './cloud-store.js', './cloud-session.js', './firebase-client.js', './firebase-sdk.js', './firebase-config.js', './firebase-transport.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));

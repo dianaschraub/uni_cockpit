@@ -3663,3 +3663,98 @@ body:has(dialog[open]){
 .cloud-backup-row small { display: block; margin-top: 6px; font-size: 10px; color: #6a7b5e; }
 @media (max-width: 1050px) { .topbar-right { gap: 5px; } .cloud-indicator { font-size: 9px; max-width: 120px; } }
 @media (max-width: 600px) { .cloud-indicator { font-size: 9px; max-width: 115px; padding: 4px; } .cloud-panel { padding: 21px; } .cloud-heading { align-items: flex-start; gap: 12px; } .cloud-heading h2 { font-size: 23px; } .cloud-panel .btn { min-height: 44px; } .cloud-panel .row-actions { align-items: stretch; } .cloud-intro .btn { margin-left: 29px; } .breadcrumb { gap: 5px; } .breadcrumb > strong { max-width: 85px; } }
+
+/* Version 2.1: useful dates, compact overview and per-assignment preparation. */
+.metric-grid { gap: 12px; margin-bottom: 22px; }
+.metric-card { padding: 12px 16px; }
+.metric-top { font-size: 11px; }
+.metric-icon { width: 24px; height: 24px; }
+.metric-value { font-size: 25px; line-height: 1.3; }
+.metric-card p { font-size: 10px; margin-top: 4px; }
+.upcoming-list { padding: 0 20px; }
+.upcoming-item { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 15px; align-items: center; padding: 18px 0; text-align: left; min-height: 94px; }
+.upcoming-item:last-child { border-bottom: 0; }
+.upcoming-item:hover { background: #f7faf2; }
+.date-tile { background: #edf2e5; color: #577345; border: 1px solid #e0e8d6; border-radius: 10px; min-height: 54px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 21px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.date-tile small { font-size: 10px; font-weight: 500; margin-top: 3px; }
+.upcoming-content { min-width: 0; display: grid; gap: 5px; }
+.upcoming-content strong { font-size: 12px; font-weight: 600; line-height: 1.65; overflow-wrap: anywhere; }
+.upcoming-content small { display: block; font-size: 10px; line-height: 1.6; color: #6b7c60; overflow-wrap: anywhere; }
+.upcoming-time { color: #637959; display: flex; align-items: center; gap: 10px; font-size: 11px; white-space: nowrap; }
+.upcoming-time .icon { width: 15px; height: 15px; }
+.course-preparation { margin: 4px 0 6px; border-top: 1px solid #00000010; }
+.course-preparation summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 44px; font-size: 11px; font-weight: 550; }
+.course-preparation summary::-webkit-details-marker { display: none; }
+.course-preparation summary > span { flex: 1; }
+.course-preparation summary small { font-size: 10px; font-variant-numeric: tabular-nums; }
+.course-preparation summary .icon { width: 15px; height: 15px; }
+.course-preparation[open] summary .icon { transform: rotate(180deg); }
+.preparation-body { padding: 0 0 12px; }
+.preparation-task { font-size: 10px; line-height: 1.7; padding-bottom: 7px; overflow-wrap: anywhere; }
+.preparation-body .check-item { padding: 7px 0; font-size: 12px; min-height: 44px; }
+.pdf-check { margin-top: 7px; border-top: 1px solid #00000010; }
+.preparation-body .btn { margin-top: 8px; }
+.parts-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.parts-heading span { font-size: 10px; color: #6a7b60; }
+.part-edit-row { display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 8px; align-items: center; margin: 8px 0; }
+.part-check { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+.part-check input { width: 19px; height: 19px; accent-color: #55784a; cursor: pointer; }
+.part-edit-row > input { width: 100%; min-height: 44px; border: 1px solid #dce3d3; border-radius: 7px; padding: 10px 12px; font-size: 12px; color: #4e6440; }
+#task-parts + .btn { margin-top: 7px; }
+@media (max-width: 1050px) {
+  .metric-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .metric-card { padding: 11px 12px; }
+  .metric-card p { display: none; }
+  .metric-value { font-size: 24px; }
+  .metric-top { min-height: 25px; line-height: 1.4; font-size: 10px; }
+  .metric-icon { width: 20px; height: 20px; }
+}
+@media (max-width: 600px) {
+  .sidebar { padding-top: 12px; }
+  .brand-mark { height: 34px; width: 34px; }
+  .semester-picker { margin: 10px 0 9px; }
+  .semester-picker > label { display: none; }
+  .select-wrap { margin-top: 0; }
+  .main-nav .nav-item { min-height: 48px; padding-top: 6px; padding-bottom: 7px; gap: 4px; }
+  .sidebar-bottom { top: 9px; }
+  .topbar { height: 42px; }
+  main { padding: 18px 16px 25px; }
+  main:has(.dashboard-columns) .page-heading { margin-bottom: 12px; gap: 9px; align-items: center; }
+  main:has(.dashboard-columns) .page-heading h1 { font-size: 26px; }
+  main:has(.dashboard-columns) .page-heading .eyebrow { margin-bottom: 5px; font-size: 8px; }
+  main:has(.dashboard-columns) .page-description { display: none; }
+  main:has(.dashboard-columns) .page-heading > .btn { margin: 0; min-height: 44px; padding: 8px 10px; font-size: 10px; }
+  .semester-line { margin-bottom: 12px; }
+  .semester-line > span:last-child { display: none; }
+  .metric-grid { gap: 6px; margin-bottom: 18px; }
+  .metric-card { padding: 8px 9px; border-radius: 9px; }
+  .metric-icon { display: none; }
+  .metric-top { font-size: 10px; min-height: 28px; align-items: flex-start; }
+  .metric-value { font-size: 23px; margin-top: 1px; line-height: 1.2; }
+  .metric-value small { font-size: 10px; padding-left: 2px; }
+  .section-heading { margin-bottom: 11px; }
+  .section-heading h2 { font-size: 16px; }
+  .dashboard-main > .section-heading p { display: none; }
+  .countdown-card { padding: 15px 16px 12px; }
+  .countdown-card .course-heading { min-height: 35px; }
+  .countdown-card .course-heading h3 { font-size: 13px; line-height: 1.55; }
+  .countdown-label { margin-top: 9px; }
+  .countdown-digits { margin-top: 10px; gap: 17px; }
+  .countdown-digits > span { font-size: 37px; }
+  .countdown-digits small { margin-top: 5px; }
+  .countdown-date { margin: 12px 0 10px; font-size: 11px; }
+  .countdown-empty { min-height: 120px; padding: 10px 0 17px; }
+  .course-bottom, .course-bottom > .text-link { font-size: 10px; }
+  .upcoming-list { padding: 0 16px; }
+  .upcoming-item { grid-template-columns: 44px minmax(0,1fr); gap: 5px 12px; padding: 16px 22px 16px 0; position: relative; }
+  .date-tile { grid-row: 1 / 3; }
+  .upcoming-content { grid-column: 2; gap: 3px; }
+  .upcoming-content strong { font-size: 12px; }
+  .upcoming-content small { font-size: 11px; }
+  .upcoming-time { grid-column: 2; font-size: 11px; margin-top: 4px; }
+  .upcoming-time .icon { position: absolute; right: 0; top: calc(50% - 7px); }
+  .part-edit-row > input { font-size: 14px; }
+  .cloud-intro { padding: 12px; gap: 8px; }
+  .cloud-intro p { display: none; }
+  .cloud-intro > .btn { margin-left: 27px; }
+}
