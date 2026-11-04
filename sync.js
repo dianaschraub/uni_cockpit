@@ -1,4 +1,4 @@
-import { validateState, uid } from './model.js';
+import { validateState, uid, ensurePreparation } from './model.js';
 
 // Document metadata and the selected view are local concerns, not study content.
 export const content = state => ({ schemaVersion: state.schemaVersion, semesters: state.semesters });
@@ -12,6 +12,9 @@ const labels = { name:'Name', title:'Titel', notes:'Notizen', dueAt:'Abgabefrist
  * status and actual submission time form one atomic value.
  */
 export function mergeStates(base, local, remote, preference = 'local') {
+  // Normalize only copies: old backups and clients remain readable, and equal
+  // template additions cannot conflict just because a device upgraded earlier.
+  [base,local,remote]=[base,local,remote].map(state=>{const next=structuredClone(state);ensurePreparation(next);return next;});
   const conflicts = [];
   function conflict(b, l, r, path) {
     conflicts.push({ path: path.join(' › '), local: clone(l), remote: clone(r) });
@@ -70,7 +73,7 @@ export function addLocalSemesters(remote, local) {
   for(const original of local.semesters) {
     const s=structuredClone(original);s.id=uid();
     if(result.semesters.some(v=>v.name===s.name))s.name=`${s.name.slice(0,170)} (von diesem Gerät)`;
-    for(const l of s.lectures){l.id=uid();for(const t of l.tasks)t.id=uid();for(const w of l.weeks)w.id=uid();}
+    for(const l of s.lectures){l.id=uid();for(const t of l.tasks){t.id=uid();for(const p of t.parts||[])p.id=uid();}for(const w of l.weeks)w.id=uid();}
     result.semesters.push(s);
   }
   return validateState(result);

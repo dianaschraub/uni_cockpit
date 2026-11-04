@@ -13,15 +13,31 @@ export const TEMPLATES = {
   },
   math: {
     name: 'Mathematik', unit: 'Online-Quiz',
-    steps: ['Quiz geöffnet', 'Fragen bearbeitet', 'Antworten kontrolliert', 'Quiz eingereicht'],
+    steps: ['Quiz geöffnet', 'Quiz als PDF umformatiert', 'Fragen bearbeitet', 'Antworten kontrolliert', 'Quiz eingereicht'],
     anki: ['Quiz- und Testfragen', '⭐ Klausurrelevante Karteikarten', 'Definitionen und Regeln', 'Weitere Inhalte und Fehlerkorrekturen']
   }
 };
 export const uid = () => globalThis.crypto.randomUUID();
+export function defaultParts(taskId) {
+  return [1,2,3].map(number=>({id:`${taskId}:part:${number}`,label:`Aufgabe ${number}`,done:false}));
+}
 export function makeTask(number, template = 'linguistics') {
-  return { id: uid(), number, title: `${TEMPLATES[template].unit} ${number}`, releaseAt: null,
+  const id=uid();
+  return { id, number, title: `${TEMPLATES[template].unit} ${number}`, releaseAt: null,
     dueAt: null, status: 'open', submittedAt: null, score: null, passed: null,
-    steps: TEMPLATES[template].steps.map(label => ({ label, done: false })), notes: '', link: '' };
+    steps: TEMPLATES[template].steps.map(label => ({ label, done: false })), parts:defaultParts(id), notes: '', link: '' };
+}
+// Deterministic defaults make the same old task migrate identically on two devices.
+// No dates, results, submission status, notes or existing checkmarks are changed.
+export function ensurePreparation(state) {
+  let changed=false;
+  for(const s of state.semesters)for(const l of s.lectures)for(const t of l.tasks){
+    if(t.parts===undefined){t.parts=defaultParts(t.id);changed=true;}
+    if(l.template==='math' && t.steps.length<50 && !t.steps.some(step=>step.label==='Quiz als PDF umformatiert')){
+      t.steps.splice(Math.min(1,t.steps.length),0,{label:'Quiz als PDF umformatiert',done:false});changed=true;
+    }
+  }
+  return changed;
 }
 export function makeLecture(name, template = 'linguistics', count = 0) {
   return { id: uid(), name, template, countKnown: count > 0,
@@ -87,8 +103,11 @@ export function statistics(lectures, now = Date.now()) {
 }
 export function copyLectureStructure(source) {
   return source.map(lecture => ({ ...makeLecture(lecture.name, lecture.template), countKnown: lecture.countKnown,
-    tasks: lecture.tasks.map(task => ({ ...makeTask(task.number, lecture.template), title: task.title,
-      steps: task.steps.map(step => ({ label: step.label, done: false })) })) }));
+    tasks: lecture.tasks.map(task => {
+      const next=makeTask(task.number,lecture.template);
+      return {...next,title:task.title,steps:task.steps.map(step=>({label:step.label,done:false})),
+        parts:task.parts?.map((part,index)=>({id:`${next.id}:part:${index+1}`,label:part.label,done:false}))||next.parts};
+    }) }));
 }
 // Validate imports strictly before replacing any data. Limits also bound rendering cost.
 export function validateState(input) {
@@ -97,7 +116,7 @@ export function validateState(input) {
   const str = (v, max = 500, required = false) => typeof v === 'string' && v.length <= max && (!required || v.trim().length > 0);
   const date = v => v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v)));
   const ids = new Set();
-  const id = value => { if (!str(value, 100, true) || ids.has(value)) fail('fehlende oder doppelte ID.'); ids.add(value); };
+  const id = (value,max=100) => { if (!str(value, max, true) || ids.has(value)) fail('fehlende oder doppelte ID.'); ids.add(value); };
   const checklist = (items, max) => Array.isArray(items) && items.length <= max && items.every(i => obj(i) && str(i.label, 500, true) && typeof i.done === 'boolean');
   if (!obj(input) || input.schemaVersion !== SCHEMA_VERSION) fail('Dateiformat oder Version wird nicht unterstützt.');
   if (!Number.isSafeInteger(input.revision) || input.revision < 0 || !date(input.updatedAt) || input.updatedAt === null) fail('Speicherinformationen fehlen.');
@@ -113,6 +132,10 @@ export function validateState(input) {
       for (const t of l.tasks) {
         if (!obj(t)) fail('Aufgabe ist beschädigt.');
         id(t.id);
+        if(t.parts!==undefined){
+          if(!checklist(t.parts,50))fail('Teilaufgaben sind ungültig oder zu zahlreich.');
+          for(const part of t.parts)id(part.id,200);
+        }
         if (!Number.isInteger(t.number) || t.number < 1 || t.number > 9999 || !str(t.title, 300, true) || !date(t.releaseAt) || !date(t.dueAt) || !date(t.submittedAt) || !Object.hasOwn(STATUS, t.status) || !checklist(t.steps, 50) || !str(t.notes, 20000) || !str(t.link, 2000)) fail('Aufgabendaten sind unvollständig.');
         if (t.releaseAt && t.dueAt && Date.parse(t.releaseAt) > Date.parse(t.dueAt)) fail('Freischaltung liegt nach der Abgabe.');
         if (t.status === 'submitted' && !t.submittedAt) fail('Abgabezeitpunkt fehlt.');
