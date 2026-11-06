@@ -1,6 +1,6 @@
 import { isUrgentDeadline, pendingDeadlineAlarms } from './deadline-alerts.js';
 import { STATUS, TEMPLATES, uid, initialState, makeLecture, makeTask, taskStatus, reconcileDeadlines,
-  countdownParts, lectureCountdown, statistics, copyLectureStructure, validateState, urgency, ensurePreparation } from './model.js';
+  countdownParts, lectureCountdown, sortLecturesByDeadline, statistics, copyLectureStructure, validateState, urgency, ensurePreparation } from './model.js';
 import { LocalRepository, STORAGE_KEY } from './storage.js';
 import { CloudSession } from './cloud-session.js';
 
@@ -151,7 +151,7 @@ function render() {
         ${s.archived ? `<div class="notice">${icon('archive')}<div><strong>Du siehst ein archiviertes Semester.</strong><p>Alle Daten bleiben erhalten und können weiter bearbeitet werden.</p></div></div>` : ''}
         ${{dashboard:renderDashboard,tasks:renderTasks,anki:renderAnki,stats:renderStats,settings:renderSettings,backup:renderBackup,help:renderHelp}[view]()}
       </main>
-      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.2.1</span></footer>
+      <footer class="page-footer"><span>Mit klarem Kopf durchs Semester.</span><span>Mein Uni-Cockpit <span class="footer-dot">·</span> Version 2.2.2</span></footer>
     </div>`;
   for(const id of openedDetails){const detail=document.getElementById(id);if(detail)detail.open=true;}
   queueMicrotask(pollDeadlineAlarm);
@@ -183,8 +183,8 @@ function renderDashboard() {
     </div>
     ${unresolved.length ? `<div class="notice danger">${icon('alert')}<div><strong>${unresolved.length} ${unresolved.length === 1 ? 'Abgabe ist' : 'Abgaben sind'} noch ungeklärt.</strong><p>Bestätige, ob du abgegeben oder die Frist versäumt hast. Dein nächster Countdown läuft weiter.</p></div>${button('unresolved','Jetzt klären','arrow','btn btn-white')}</div>` : ''}
     <div class="dashboard-columns"><div class="dashboard-main">
-      <div class="section-heading"><div><h2>Deine nächsten Abgaben <span class="count-pill">${s.lectures.length}</span></h2><p>Eine Vorlesung, ein Countdown. Du behältst den Überblick.</p></div>${button('new-task','<span class="sr-only">Aufgabe hinzufügen</span>','plus','btn btn-primary mobile-add-task')}</div>
-      <div class="countdown-grid">${s.lectures.length ? s.lectures.map(countdownCard).join('') : empty('book','Platz für dein Semester','Füge deine erste Vorlesung hinzu.',button('new-lecture','Vorlesung hinzufügen','plus','btn btn-primary'))}</div>
+      <div class="section-heading"><div><h2>Deine nächsten Abgaben <span class="count-pill">${s.lectures.length}</span></h2><p>Nach der nächsten Abgabefrist sortiert.</p></div>${button('new-task','<span class="sr-only">Aufgabe hinzufügen</span>','plus','btn btn-primary mobile-add-task')}</div>
+      <div class="countdown-grid">${s.lectures.length ? sortLecturesByDeadline(s.lectures).map(countdownCard).join('') : empty('book','Platz für dein Semester','Füge deine erste Vorlesung hinzu.',button('new-lecture','Vorlesung hinzufügen','plus','btn btn-primary'))}</div>
       <div class="legend" aria-label="Countdown-Farben"><span><i class="dot blue"></i>Mehr als 5 Tage</span><span><i class="dot orange"></i>2–5 Tage</span><span><i class="dot red"></i>Unter 2 Tagen</span><span><i class="dot green"></i>Keine offene Frist</span></div>
       ${deadlineAlarmControls()}
       <section class="panel next-panel"><div class="panel-heading"><h2>Was als Nächstes ansteht</h2><a href="#tasks" class="text-link">Alle Aufgaben ${icon('arrow')}</a></div>
@@ -203,7 +203,7 @@ function countdownCard(l) {
   const urgent=c.kind==='deadline' && isUrgentDeadline(c.task);
   const activeTask=c.task||l.tasks.find(t=>taskStatus(t)==='open');
   const content = c.target ? `<p class="countdown-label"><span class="deadline-kind">${c.kind === 'release' ? 'NÄCHSTE FREISCHALTUNG' : 'NÄCHSTE ABGABE'}</span> <span>· ${esc(c.task.title)}</span></p><div class="countdown-digits" data-target="${c.target}">${digits(c.target)}</div><p class="countdown-date">${icon('calendar')}${fmtDate(c.target)}</p>${c.kind==='deadline' && c.task.releaseAt && Date.parse(c.task.releaseAt)>Date.now() ? `<p class="release-note">Freischaltung: ${fmtDate(c.task.releaseAt)}</p>` : ''}` : `<div class="countdown-empty"><span class="countdown-empty-icon">${icon(c.kind === 'unresolved' ? 'alert' : 'calendar')}</span><h3>${c.kind === 'unresolved' ? 'Eine Rückfrage bleibt.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Bereit für deine Termine.' : 'Gerade alles im Grünen.'}</h3><p>${c.kind === 'unresolved' ? 'Bitte kläre die überfälligen Abgaben.' : l.tasks.some(t=>taskStatus(t)==='open' && !t.dueAt) ? 'Trage deine erste Abgabefrist ein.' : 'Aktuell steht keine offene Abgabe an.'}</p></div>`;
-  return `<article class="countdown-card tone-${c.color}${urgent?' deadline-urgent':''}"><div class="course-heading">${courseIcon(l)}<h3>${esc(l.name)}</h3>${button('edit-lecture',`<span class="sr-only">${esc(l.name)} bearbeiten</span>`,'edit','icon-button',`data-lecture="${l.id}"`)}</div>${urgent?`<p class="urgent-badge">${icon('alert')}Abgabe in höchstens 24 Stunden</p>`:''}${content}
+  return `<article data-lecture="${l.id}" class="countdown-card tone-${c.color}${urgent?' deadline-urgent':''}"><div class="course-heading">${courseIcon(l)}<h3>${esc(l.name)}</h3>${button('edit-lecture',`<span class="sr-only">${esc(l.name)} bearbeiten</span>`,'edit','icon-button',`data-lecture="${l.id}"`)}</div>${urgent?`<p class="urgent-badge">${icon('alert')}Abgabe in höchstens 24 Stunden</p>`:''}${content}
     ${c.unresolved.length ? `<button class="overdue-warning" data-action="course-unresolved" data-lecture="${l.id}">${icon('alert')}${c.unresolved.length} überfällige ${c.unresolved.length === 1 ? 'Abgabe' : 'Abgaben'} zu klären ${icon('arrow')}</button>` : ''}
     ${activeTask?coursePreparation(l,activeTask):''}
     <div class="course-bottom"><span>${stats.submitted} von ${stats.total} abgegeben${!l.countKnown ? ' · Anzahl noch offen' : ''}</span>${button('course-tasks', c.target ? 'Aufgaben ansehen' : 'Aufgaben & Termine','arrow','text-link',`data-lecture="${l.id}"`)}</div>${progress(stats.submitted,stats.total)}
