@@ -89,6 +89,15 @@ export function lectureCountdown(lecture, now = Date.now()) {
   return { kind: unresolved.length ? 'unresolved' : 'clear', color: unresolved.length ? 'red' : 'green',
     task: null, target: null, unresolved };
 }
+// Dashboard order is derived, never persisted into the lecture structure.
+export function sortLecturesByDeadline(lectures, now = Date.now()) {
+  const rank = { deadline:0, release:1, unresolved:2, clear:3 };
+  return lectures.map((lecture,index) => {
+    const countdown=lectureCountdown(lecture,now);
+    return {lecture,index,rank:rank[countdown.kind],time:countdown.target?Date.parse(countdown.target):Infinity};
+  }).sort((a,b) => a.rank-b.rank || (a.time<b.time?-1:a.time>b.time?1:a.index-b.index))
+    .map(item => item.lecture);
+}
 export function statistics(lectures, now = Date.now()) {
   const tasks = lectures.flatMap(l => l.tasks);
   const count = status => tasks.filter(t => taskStatus(t, now) === status).length;
